@@ -69,8 +69,9 @@ SUPPORTED_BEDROCK_EMBEDDING_MODELS = {
     "cohere.embed-multilingual-v3": "Cohere Embed Multilingual",
     "cohere.embed-english-v3": "Cohere Embed English",
     # Disable Titan embedding.
-    # "amazon.titan-embed-text-v1": "Titan Embeddings G1 - Text",
-    # "amazon.titan-embed-image-v1": "Titan Multimodal Embeddings G1"
+    "amazon.titan-embed-text-v1": "Titan Embeddings G1 - Text",
+    "amazon.titan-embed-text-v2:0": "Titan Embeddings G2 - Text",
+    "amazon.titan-embed-image-v1": "Titan Multimodal Embeddings G1"
 }
 
 ENCODER = tiktoken.get_encoding("cl100k_base")
@@ -404,7 +405,7 @@ class BedrockModel(BaseChatModel):
         # Base inference parameters.
         inference_config = {
             "temperature": chat_request.temperature,
-            "maxTokens": chat_request.max_tokens,
+            "maxTokens": chat_request.max_tokens or 5000,
             "topP": chat_request.top_p,
         }
 
@@ -441,6 +442,20 @@ class BedrockModel(BaseChatModel):
                     assert "function" in chat_request.tool_choice
                     args["toolConfig"]["toolChoice"] = {
                         "tool": {"name": chat_request.tool_choice["function"].get("name", "")}}
+
+        if chat_request.response_format and chat_request.response_format['type'] != 'json_object':
+            args['toolConfig'] = {
+                "tools": [
+                    {
+                        "toolSpec": {
+                            "name": "structured_output",
+                            "description": "Generate structured output",
+                            "inputSchema": {"json": chat_request.response_format},
+                        }
+                    }
+                ],
+                "toolChoice": {"tool": {"name": "structured_output"}},
+            }
         return args
 
     def _create_response(
@@ -807,39 +822,51 @@ class CohereEmbeddingsModel(BedrockEmbeddingsModel):
 class TitanEmbeddingsModel(BedrockEmbeddingsModel):
 
     def _parse_args(self, embeddings_request: EmbeddingsRequest) -> dict:
+        arg_list = []
         if isinstance(embeddings_request.input, str):
-            input_text = embeddings_request.input
-        elif (
-                isinstance(embeddings_request.input, list)
-                and len(embeddings_request.input) == 1
-        ):
-            input_text = embeddings_request.input[0]
-        else:
-            raise ValueError(
-                "Amazon Titan Embeddings models support only single strings as input."
-            )
-        args = {
-            "inputText": input_text,
-            # Note: inputImage is not supported!
-        }
-        if embeddings_request.model == "amazon.titan-embed-image-v1":
-            args["embeddingConfig"] = (
-                embeddings_request.embedding_config
-                if embeddings_request.embedding_config
-                else {"outputEmbeddingLength": 1024}
-            )
-        return args
+            arg_list = [{
+                "inputText": embeddings_request.input,
+            }]
+        elif isinstance(embeddings_request.input, list):
+            arg_list = [{
+                "inputText": each_input,
+            } for each_input in embeddings_request.input]
+        elif isinstance(embeddings_request.input, Iterable):
+            # For encoded input
+            # The workaround is to use tiktoken to decode to get the original text.
+            encodings = []
+            for inner in embeddings_request.input:
+                if isinstance(inner, int):
+                    # Iterable[int]
+                    encodings.append(inner)
+                else:
+                    # Iterable[Iterable[int]]
+                    text = ENCODER.decode(list(inner))
+                    arg_list.append({
+                        "inputText": text,
+                    })
+            if encodings:
+                arg_list.append({
+                    "inputText": ENCODER.decode(encodings),
+                })
+
+        return arg_list
 
     def embed(self, embeddings_request: EmbeddingsRequest) -> EmbeddingsResponse:
-        response = self._invoke_model(
-            args=self._parse_args(embeddings_request), model_id=embeddings_request.model
-        )
-        response_body = json.loads(response.get("body").read())
-        if DEBUG:
-            logger.info("Bedrock response body: " + str(response_body))
+        args = self._parse_args(embeddings_request)
+        embeddings = []
+        for each_request in args:
+            response = self._invoke_model(
+                args=each_request,
+                model_id=embeddings_request.model
+            )
+            response_body = json.loads(response.get("body").read())
+            if DEBUG:
+                logger.info("Bedrock response body: " + str(response_body))
+            embeddings.append(response_body["embedding"])
 
         return self._create_response(
-            embeddings=[response_body["embedding"]],
+            embeddings=embeddings,
             model=embeddings_request.model,
             input_tokens=response_body["inputTextTokenCount"],
         )
@@ -852,6 +879,8 @@ def get_embeddings_model(model_id: str) -> BedrockEmbeddingsModel:
     match model_name:
         case "Cohere Embed Multilingual" | "Cohere Embed English":
             return CohereEmbeddingsModel()
+        case "Titan Embeddings G2 - Text":
+            return TitanEmbeddingsModel()
         case _:
             logger.error("Unsupported model id " + model_id)
             raise HTTPException(

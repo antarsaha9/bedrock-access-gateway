@@ -1,8 +1,10 @@
 import time
+import logging
 from typing import Literal, Iterable
 
 from pydantic import BaseModel, Field
-
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 class Model(BaseModel):
     id: str
@@ -82,6 +84,11 @@ class Tool(BaseModel):
 class StreamOptions(BaseModel):
     include_usage: bool = True
 
+class JsonSchema(BaseModel):
+    schema: dict
+class ResponseFormatT(BaseModel):
+    type: Literal['json_schema', 'json_object']
+    # json_schema: JsonSchema |None=None
 
 class ChatRequest(BaseModel):
     messages: list[SystemMessage | UserMessage | AssistantMessage | ToolMessage]
@@ -98,6 +105,11 @@ class ChatRequest(BaseModel):
     tools: list[Tool] | None = None
     tool_choice: str | object = "auto"
     stop: list[str] | str | None = None
+    response_format: dict | None = None
+    cache: bool | None = True
+    invalidate_cache: bool | None = False
+    # response_format: ResponseFormatT | None = None
+
 
 
 class Usage(BaseModel):
@@ -153,6 +165,8 @@ class EmbeddingsRequest(BaseModel):
     encoding_format: Literal["float", "base64"] = "float"
     dimensions: int | None = None  # not used.
     user: str | None = None  # not used.
+    cache: bool | None = True
+    invalidate_cache: bool | None = False
 
 
 class Embedding(BaseModel):

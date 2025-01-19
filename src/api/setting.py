@@ -20,3 +20,5 @@ DEFAULT_EMBEDDING_MODEL = os.environ.get(
     "DEFAULT_EMBEDDING_MODEL", "cohere.embed-multilingual-v3"
 )
 ENABLE_CROSS_REGION_INFERENCE = os.environ.get("ENABLE_CROSS_REGION_INFERENCE", "true").lower() != "false"
+CACHE_PATH = os.environ.get("CACHE_PATH", "./cache")
+ENABLE_RESPONSE_CACHE = os.environ.get("ENABLE_RESPONSE_CACHE", "false").lower() != "false"
