@@ -1,5 +1,6 @@
 import logging
 from typing import Annotated
+import time
 
 from fastapi import APIRouter, Depends, Body
 from fastapi.responses import StreamingResponse
@@ -20,6 +21,18 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
+def test():
+    logger.info('timer started')
+    time.sleep(4)
+    logger.info('timer finished')
+
+@router.post("/test_concurrency")
+async def test_concurrency():
+    logger.info('requests arrived')
+    await run_in_threadpool(test)
+    logger.info('request done')
+    return "test_concurrency"
 
 @router.post("/completions", response_model=ChatResponse | ChatStreamResponse, response_model_exclude_unset=True)
 async def chat_completions(
