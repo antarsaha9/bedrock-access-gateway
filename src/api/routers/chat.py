@@ -2,7 +2,7 @@ import logging
 from typing import Annotated
 import time
 
-from fastapi import APIRouter, Depends, Body
+from fastapi import APIRouter, Body, Depends
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -36,20 +36,20 @@ async def test_concurrency():
 
 @router.post("/completions", response_model=ChatResponse | ChatStreamResponse, response_model_exclude_unset=True)
 async def chat_completions(
-        chat_request: Annotated[
-            ChatRequest,
-            Body(
-                examples=[
-                    {
-                        "model": "anthropic.claude-3-sonnet-20240229-v1:0",
-                        "messages": [
-                            {"role": "system", "content": "You are a helpful assistant."},
-                            {"role": "user", "content": "Hello!"},
-                        ],
-                    }
-                ],
-            ),
-        ]
+    chat_request: Annotated[
+        ChatRequest,
+        Body(
+            examples=[
+                {
+                    "model": "anthropic.claude-3-sonnet-20240229-v1:0",
+                    "messages": [
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": "Hello!"},
+                    ],
+                }
+            ],
+        ),
+    ],
 ):
     if chat_request.model.lower().startswith("gpt-"):
         chat_request.model = DEFAULT_MODEL
@@ -68,9 +68,7 @@ async def chat_completions(
     model = BedrockModel()
     model.validate(chat_request)
     if chat_request.stream:
-        return StreamingResponse(
-            content=model.chat_stream(chat_request), media_type="text/event-stream"
-        )
+        return StreamingResponse(content=model.chat_stream(chat_request), media_type="text/event-stream")
     response = await run_in_threadpool(model.chat, chat_request)  # used run_in_threadpool for concurrent threads
     if ENABLE_RESPONSE_CACHE and chat_request.cache:
         # Store the response in the cache

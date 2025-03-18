@@ -3,6 +3,9 @@ import logging
 from typing import Literal, Iterable
 
 from pydantic import BaseModel, Field
+
+from api.setting import DEFAULT_MODEL
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -60,7 +63,7 @@ class UserMessage(BaseModel):
 class AssistantMessage(BaseModel):
     name: str | None = None
     role: Literal["assistant"] = "assistant"
-    content: str | list[TextContent | ImageContent] | None
+    content: str | list[TextContent | ImageContent] | None = None
     tool_calls: list[ToolCall] | None = None
 
 
@@ -92,7 +95,7 @@ class ResponseFormatT(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[SystemMessage | UserMessage | AssistantMessage | ToolMessage]
-    model: str
+    model: str = DEFAULT_MODEL
     frequency_penalty: float | None = Field(default=0.0, le=2.0, ge=-2.0)  # Not used
     presence_penalty: float | None = Field(default=0.0, le=2.0, ge=-2.0)  # Not used
     stream: bool | None = False
@@ -101,6 +104,8 @@ class ChatRequest(BaseModel):
     top_p: float | None = Field(default=1.0, le=1.0, ge=0.0)
     user: str | None = None  # Not used
     max_tokens: int | None = 2048
+    max_completion_tokens: int | None = None
+    reasoning_effort: Literal["low", "medium", "high"] | None = None
     n: int | None = 1  # Not used
     tools: list[Tool] | None = None
     tool_choice: str | object = "auto"
@@ -123,6 +128,7 @@ class ChatResponseMessage(BaseModel):
     role: Literal["assistant"] | None = None
     content: str | None = None
     tool_calls: list[ToolCall] | None = None
+    reasoning_content: str | None = None
 
 
 class BaseChoice(BaseModel):
