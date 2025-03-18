@@ -69,8 +69,5 @@ async def chat_completions(
     model.validate(chat_request)
     if chat_request.stream:
         return StreamingResponse(content=model.chat_stream(chat_request), media_type="text/event-stream")
-    response = await run_in_threadpool(model.chat, chat_request)  # used run_in_threadpool for concurrent threads
-    if ENABLE_RESPONSE_CACHE and chat_request.cache:
-        # Store the response in the cache
-        write_to_cache(cache_key, request_dict, response.model_dump())
-    return response
+    
+    return await model.chat(chat_request)
